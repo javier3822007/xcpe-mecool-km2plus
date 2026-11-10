@@ -7,7 +7,7 @@ Notas de cuando desarmé el backdoor de fábrica de dos MECOOL KM2 Plus que teng
 
 English version (short advisory): [ADVISORY.md](ADVISORY.md)
 
-Si tienes una de estas tvbox y solo quieres saber qué cochinadas hacer, salta mis hermosas notas personales y ve a [Revisa tu tvbox](#revisa-tu-tvbox) y [Lo que hice](#lo-que-hice).
+Si tienes una de estas tvbox y solo quieres saber qué hacer, salta mis hermosas notas personales y ve a [Revisa tu tvbox](#revisa-tu-tvbox) y [Lo que hice](#lo-que-hice).
 
 
 ## Resumen
