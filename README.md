@@ -5,6 +5,8 @@ Análisis del backdoor XCPE en dos MECOOL KM2 Plus: qué hace, cómo se instala 
 
 Notas de cuando desarmé el backdoor de fábrica de dos MECOOL KM2 Plus que tengo, después de las noticias de noviembre de 2026 sobre la botnet XCPE / BadBox. Todo lo hice en mis propios equipos, con ADB, PowerShell y un PC con Linux. Análisis estático más algunas revisiones en vivo en los tvbox. No ejecuté el malware en un sandbox, y cuando lo revisé los servidores de control ya los habian botado.
 
+English version (short advisory): [ADVISORY.md](ADVISORY.md)
+
 Si tienes una de estas tvbox y solo quieres saber qué cochinadas hacer, salta mis hermosas notas personales y ve a [Revisa tu tvbox](#revisa-tu-tvbox) y [Lo que hice](#lo-que-hice).
 
 
@@ -17,6 +19,7 @@ Si tienes una de estas tvbox y solo quieres saber qué cochinadas hacer, salta m
 - Los dominios de control (C2) de mis muestras dan **NXDOMAIN** al 6 de noviembre de 2026, lo que calza con el desmantelamiento reportado el 2 de noviembre. Pero el código sigue en el firmware.
 - `pm uninstall --user 0 com.oemservice` aguantó dos reinicios en mis pruebas. Un reseteo de fábrica muy probablemente lo trae de vuelta.
 - La muestra 6.5.0 está en VirusTotal desde el **31-12-2023**, y alguien armó un grafo en VirusTotal llamado "MeCool KM2 Plus Deluxe" en **diciembre de 2024**.
+- **Actualización 10-11-2026:** la tvbox A recibió en silencio una OTA a **C1.3.3_20260611** entre el 6 y el 8 de noviembre de 2026, o sea **después** del desmantelamiento y del comunicado de MECOOL. La OTA reescribió `/oem` completa y volvió a meter **el mismo XCPE 6.9.2, byte por byte** (mismo SHA256), y el mismo mini instalador en `/system`. Ver [La OTA de noviembre](#la-ota-de-noviembre-2026).
 
 ## Equipos
 
@@ -26,10 +29,10 @@ Si tienes una de estas tvbox y solo quieres saber qué cochinadas hacer, salta m
 | `ro.product.name` / device | `HP4414-MECOOL` / `YYC` | `HP4414-MECOOL` / `YYC` |
 | `ro.product.manufacturer` | `SkyworthDigital` | `SkyworthDigital` |
 | Android | 14 | 14 |
-| Firmware (`oem.buildnumber`) | `C1.3.1_20260314` | `C1.2.7_20250822` |
+| Firmware (`oem.buildnumber`) | `C1.3.1_20260314` → `C1.3.3_20260615` (OTA, nov. 2026) | `C1.2.7_20250822` |
 | Estado al encontrarla | solo el mini instalador | **6.5.0 activo, MQTT corriendo** |
 
-El tvbox B es el más antiguo, de uso diario normal, y nunca lo había tocado antes de esto.
+El tvbox B es el más antiguo, de uso diario normal, y nunca lo había tocado antes de esto. (El `ro.build.fingerprint` de la C1.3.3 dice `C1.3.3_20260611`; el `oem.buildnumber` dice `20260615`, la fecha de la partición `/oem`.)
 
 ## Contexto
 
@@ -60,6 +63,7 @@ La app de pruebas de fabrica del mismo firmware (`com.oem.qa`, "BoxFactoryTest")
 | Corriendo en la tvbox B, `/data/app` | 6.5.0.20230804 (43) | 31-12-2023 |
 | `/oem` de la tvbox B (firmware de ago. 2025) | 6.8.4 (59) | 18-05-2026 |
 | `/oem` de la tvbox A (firmware de mar. 2026) | 6.9.2 (65) | 04-11-2026 |
+| `/oem` de la tvbox A tras la OTA C1.3.3 (firmware de jun. 2026, instalado en nov. 2026) | 6.9.2 (65), **mismo archivo** | – |
 
 Algo raro: la tvbox B corría la 6.5.0 aunque su propio `/oem` traia la 6.8.4. Su `lastUpdateTime` era 25-07-2024, anterior a la fecha del firmware actual. Yo creo que la 6.5.0 se instaló en 2024 con un firmware anterior, una OTA de despues dejo la 6.8.4 en `/oem`, y el mini instalador nunca reemplazó la copia que ya estaba en `/data`. El mismo par (XCPE 6.5.0 + BoxFactoryTest 6.2.7) se subió a VirusTotal con 13 segundos de diferencia el 31-12-2023, así que esa combinación ya existía en la tvbox de otra persona en esa fecha.
 
@@ -72,6 +76,32 @@ Algo raro: la tvbox B corría la 6.5.0 aunque su propio `/oem` traia la 6.8.4. S
 | `RoomProvider` / `ShareProvider` | no | si | si |
 
 Mi lectura: al principio la publicidad venía integrada; después la sacaron a un loader aparte (`com.abc.nexus`) que descarga los modulos de monetización. Ninguna de mis tvbox tenia `com.abc.nexus` instalado.
+
+## La OTA de noviembre 2026
+
+El 6-11-2026 la tvbox A estaba en C1.3.1 (lo tengo anotado). El 8-11 ya estaba en C1.3.3. Se instaló sola, en silencio, al reiniciar (es un equipo A/B, no aparece la pantalla de actualización). `sys.boot.reason` quedó en `reboot,ota`.
+
+Comparé la tvbox A antes y después, y la tvbox B que sigue en C1.2.7:
+
+| | tvbox B (C1.2.7) | tvbox A (C1.3.1, 6-11) | tvbox A (C1.3.3, 10-11) |
+|---|---|---|---|
+| `/oem/app_xcpe_ext_sign` | `c9baee08…` (6.8.4) | `aa6269b9…` (6.9.2) | `aa6269b9…` (6.9.2, **idéntico**) |
+| Mini instalador `/system/priv-app/app_xcpe_preset` | `88e1b6ec…` | `88e1b6ec…` | `88e1b6ec…` (**idéntico**) |
+| `/oem/BoxFactoryTest_sign` | `675226b8…` | `6e95ce13…` | `6e95ce13…` |
+| Fecha de los archivos en `/oem` | – | 2026-03-14 | **2026-06-15** (partición reescrita) |
+| `/oem/app/SdtDeviceInfo` | sí | sí | no |
+| `/system/app/AxTools` | no | ? | sí |
+| `com.sdt.upgrade` | no existe | existe | existe |
+
+O sea:
+
+- `oem` está en `ro.product.ab_ota_partitions`. La OTA no "dejó olvidado" el backdoor: **escribió la partición `/oem` de nuevo y metió el mismo XCPE**.
+- El firmware se compiló en junio, antes del desmantelamiento, pero se **entregó e instaló en noviembre**, después del desmantelamiento (2-11) y del correo de MECOOL diciendo que estaban revisando el firmware (4-11).
+- Yo tenía `com.sdt.ota` desinstalado (`--user 0`) desde el 6-11, así que la OTA entró por otro lado. Lo más probable es `com.sdt.upgrade` (`SdtUpgradeService`), que no existe en la C1.2.7 y aparece en la C1.3.x.
+- **Lo bueno:** los `pm uninstall --user 0` sobrevivieron la OTA. `com.oemservice`, `com.oem.qa`, `backupappmanger` y `com.sdt.ota` siguieron desinstalados.
+- Con `com.sdt.ota` reactivado, ninguna de las dos tvbox ofreció más actualizaciones (10-11-2026). La tvbox B sigue en C1.2.7.
+
+Ojo: el `firstInstallTime` de las apps de sistema nuevas sale 2008-12-31, y el timestamp de `reboot,ota` en `persist.sys.boot.reason.history` coincide con la fecha del build. Es el reloj del equipo que arranca en la fecha del firmware antes de sincronizar, no la fecha real de instalación.
 
 ## Lo que "puede" hacer
 
@@ -120,6 +150,20 @@ VirusTotal avisa que "contiene ejecutables de Linux". Hay dos archivos `.so` (`l
 | `szbboys.com`, `bestipip.com`, `anyevonline.com` (raíz) | | NXDOMAIN |
 | `intermedia-arts.tv` | listas de IoC, no en mis muestras | NXDOMAIN |
 | `yokatvonline.com` | listas de IoC, no en mis muestras | sigue registrado (DNS de Alibaba Cloud), sin registro A |
+| `mqtt.szbboys.com` (puertos 3885–3887), `ott.szbboys.com:8000` | informe de Google | – |
+| `mcstb.anyevonline.com:8000`, `stb<versión><tipo>.anyevonline.com:8000` | informe de Google | – |
+
+Lo que dice el informe de Google (GTIG, 02-11-2026) y calza con mis muestras:
+
+- El arranque hace un POST a `http://mcstb.anyevonline.com:8000` **si `ro.mecool.device` es true**; si no, arma `http://stb<versiónAndroid><tipo>.anyevonline.com:8000`. En mis dos tvbox `ro.mecool.device` está **vacío**, así que irían por la segunda vía, y eso calza con el `extstb.anyevonline.com` que encontré en las versiones de `/oem`.
+- Endpoints `/router/config/mqtt`, `/router/config/acs` y `/router/config/app`: los mismos que yo vi en la 6.8.4.
+- El broker MQTT `mqtt.szbboys.com` escucha en los puertos **no estándar 3885–3887** (IPs `219.134.163.210` y `.211`).
+- Otros servidores del operador: `38.145.197.135` (hospeda `anyevonline.com` y archivos) y `23.94.49.57` (archivos y C2).
+- `ShareProvider` (`com.oem.share.provider`), `libtraceroute.so`, desactivar Play Protect con `package_verifier_user_consent = -1`: todo esto también aparece en mis muestras.
+
+**Ninguno de mis hashes** (las tres versiones de XCPE, el mini instalador, BoxFactoryTest y los `libtraceroute.so`) está en la lista de IoCs de Google, así que son muestras adicionales.
+
+Google dice que si el usuario desinstala x.cpe, "se reinstala automáticamente desde `/oem/` al reiniciar". En mis pruebas, `pm uninstall --user 0` del stub **no** se revirtió con reinicios ni con una OTA completa. Creo que Google se refiere a borrar la copia de `/data/app` (las actualizaciones), no a ocultar el paquete del sistema para el usuario 0.
 
 Una captura de 15 minutos de la tvbox B (ARP spoof) antes de limpiarla no mostro MQTT, ni tráfico al puerto 16000, ni consultas DNS a estos dominios. Calza con que los dominios ya estaban muertos. La captura no ve TLS en puertos no estándar ni DNS cifrado.
 
@@ -148,6 +192,10 @@ Un vínculo a nivel de código: XCPE tiene `com.oemservice.util.InstallForAndroi
 | `com.sdt.customization` | Nada interesante |
 | `com.sdt.backupappmanger` | Una detección de AhnLab con el mismo nombre que le pone a XCPE (`Downloader/Android.Agent.1228987`). No está claro si es código compartido o una firma amplia. La saqué |
 | `com.sdt.remotecontrolota`, `globalkey`, `mecoolrcupair`, `frontpanelledsservice` | Se ven bien |
+| `com.sdt.axtools` (AxTools 1.0, `/system/app`, aparece en firmware posterior a C1.2.7) | Lo descompilé entero: 4 clases propias, cero código de red. Al arrancar, si `persist.sys.rectify.attkey=1`, borra los datos de `com.google.android.tv.axel` y deja la propiedad en 0. En mi equipo está en 0, así que no hace nada. Corre como UID 1000 (por eso la lista de permisos se ve terrible). VirusTotal 2/67, con la **misma** detección de AhnLab (`Downloader/Android.Agent.1228987`) que backupappmanger y XCPE. Benigno. SHA256 `d7eb4282373a191fce63c5d1e893f47c76d795646249f4b044c773032f2373cc` |
+| `com.sdt.upgrade` (`SdtUpgradeService`, aparece en C1.3.x) | UID de sistema, sin permisos propios. Probablemente por donde entró la OTA C1.3.3. Lo deshabilité |
+
+Sobre AhnLab: a estas alturas `Downloader/Android.Agent.1228987` le cae a tres apps distintas firmadas con la misma llave de plataforma (XCPE, backupappmanger y AxTools, que es inofensivo). Parece una firma amplia, no una prueba por sí sola.
 
 Reiniciar la tvbox B con `com.sdt.ota` y `backupappmanger` todavía activos **no** trajo de vuelta a XCPE, así que ninguno de los dos lo reinstala en un reinicio normal.
 
@@ -202,17 +250,31 @@ Si `codePath` apunta a `/data/app/...` y la versión es 6.x, se instaló el back
 adb shell pm uninstall --user 0 com.oemservice
 adb shell pm uninstall --user 0 com.oem.qa
 adb shell pm uninstall --user 0 com.sdt.backupappmanger
-adb shell pm uninstall --user 0 com.sdt.ota          # opcional, no quiero sus p*tos OTAs cochinos en mis tvbox
+adb shell pm uninstall --user 0 com.sdt.ota          # opcional; total, sus OTAs traen de regalo el mismo backdoor (ver arriba)
+adb shell pm disable-user --user 0 com.sdt.upgrade   # solo existe en C1.3.x; el otro camino de las OTAs
 adb shell pm disable-user --user 0 com.sdt.producttest
 
 # confirmar (sin -u, porque ese también lista los desinstalados)
 adb shell "pm list packages | grep -iE 'oemservice|oem.qa|backupappmanger|sdt.ota'"
 ```
 
-- Esto no borra nada de `/system` ni de `/oem` (para eso hace falta root). Oculta el paquete para el usuario 0. En mis pruebas aguantó los reinicios, pero **un reseteo de fábrica muy muy probablemente lo deshace porque esta en /oem**. Si alguna vez reseteas, repítelo antes de conectar la tvbox a internet, si puedes.
+- Esto no borra nada de `/system` ni de `/oem` (para eso hace falta root). Oculta el paquete para el usuario 0. En mis pruebas aguantó los reinicios **y una OTA completa de firmware** (C1.3.1 → C1.3.3), pero **un reseteo de fábrica muy muy probablemente lo deshace porque esta en /oem**. Si alguna vez reseteas, repítelo antes de conectar la tvbox a internet, si puedes.
 - El control remoto, el Wi-Fi, Chromecast y las apps de streaming siguieron funcionando.
-- Como mi router no permite bloquear por dominio, agregué reglas de salida para las IP de las tvbox hacia TCP 16000, 1883 y 8883. Es limitado, pero esos tvbox no tienen por que andar usando esos puertos. Si tu router o tu DNS permiten bloquear dominios, bloquea la lista de arriba.
+- Como mi router no permite bloquear por dominio, agregué reglas de salida para las IP de las tvbox hacia TCP 16000, 1883, 8883, 8000 y 3885–3887 (y, si tu router deja, bloquea las IPs del operador que publicó Google: `219.134.163.210`, `219.134.163.211`, `38.145.197.135`, `23.94.49.57`). Es limitado, pero esos tvbox no tienen por que andar usando esos puertos. Si tu router o tu DNS permiten bloquear dominios, bloquea la lista de arriba. Mi conexión no tiene IPv6 público, así que no hay ruta para saltarse estas reglas; si la tuya tiene, replícalas en IPv6.
 - Después de limpiar: quedo,  sin servicios de accesibilidad, sin administradores de dispositivo, sin VPN, sin tareas programadas del backdoor, sin animación de arranque reemplazada, y solo conexiones abiertas a Google, CDNs y Chromecast.
+
+## Respuesta de MECOOL
+
+Tras una consulta corta por el formulario de su tienda, el 4-11-2026 mandaron un comunicado estándar sobre el incidente XCPE (`service@mecool.com`, firmado por soporte técnico post-venta). Resumen de lo que dicen:
+
+- MECOOL es una marca "operada de forma independiente"; los equipos los fabrica **Videostrong Technology Co., Ltd.**
+- Videostrong "presentó una apelación y aclaración formal a Google".
+- Hicieron una evaluación interna y, según ellos, **"los productos MECOOL existentes pueden seguir usándose de forma normal y segura"**.
+- Van a "seguir revisando la seguridad del equipo y el firmware".
+
+Lo que no dicen: nada sobre una OTA que saque XCPE, ni qué modelos o firmwares están afectados. Y la firma de [arriba](#firma) es `skydigital@skyworth.com`, no de Videostrong. Entre dos y cuatro días después de ese correo, mi tvbox recibió una OTA que volvió a instalar el mismo XCPE.
+
+El reporte formal (con el [advisory en inglés](ADVISORY.md)) está pendiente de envío.
 
 ## Limitaciones
 
@@ -223,6 +285,8 @@ adb shell "pm list packages | grep -iE 'oemservice|oem.qa|backupappmanger|sdt.ot
 
 ## Fuentes
 
+- [Shutting the door on the XCPE botnet (Google Threat Intelligence, 02-11-2026)](https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet/)
+- [Google disrupts million-device XCPE Android malware botnet, bans TV box maker (BleepingComputer)](https://www.bleepingcomputer.com/news/security/google-disrupts-million-device-xcpe-android-malware-botnet-bans-tv-box-maker/)
 - [Inside XCPE, the botnet that turned set-top boxes into proxy servers (Security Affairs)](https://securityaffairs.com/202323/malware/inside-xcpe-the-botnet-that-turned-set-top-boxes-into-proxy-servers.html)
 - [Tech Firms Dismantle Botnet That Turned 1.3M TV Boxes Into Proxies (Krebs on Security, 02-11-2026), página de la etiqueta](https://krebsonsecurity.com/tag/bmw-ipweb/)
 - Fichas de VirusTotal de los hashes de arriba, incluido un grafo de la comunidad "MeCool KM2 Plus Deluxe" (13-12-2024).
