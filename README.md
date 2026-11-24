@@ -17,9 +17,10 @@ Si tienes una de estas tvbox y solo quieres saber qué hacer, salta mis hermosas
 - Una de mis tvbox (la de uso diario desde 2024) tenía el backdoor **activo**, en la versión 6.5.0, con su cliente MQTT corriendo.
 - Lo que puede hacer (según el código): ejecutar scripts que le manda el operador, instalar y desinstalar apps, sacar los logs del sistema, bloquear el equipo, **resetearlo de fábrica a distancia**, funcionar como relay de proxy, meter publicidad y hacer pruebas de ping, traceroute y ancho de banda.
 - Los dominios de control (C2) de mis muestras dan **NXDOMAIN** al 6 de noviembre de 2026, lo que calza con el desmantelamiento reportado el 2 de noviembre. Pero el código sigue en el firmware.
-- `pm uninstall --user 0 com.oemservice` aguantó dos reinicios en mis pruebas. Un reseteo de fábrica muy probablemente lo trae de vuelta.
+- `pm uninstall --user 0 com.oemservice` aguantó dos reinicios en mis pruebas. En los firmwares con XCPE (hasta C1.3.3), un reseteo de fábrica muy probablemente lo trae de vuelta.
 - La muestra 6.5.0 está en VirusTotal desde el **31-12-2023**, y alguien armó un grafo en VirusTotal llamado "MeCool KM2 Plus Deluxe" en **diciembre de 2024**.
 - **Actualización 10-11-2026:** la tvbox A recibió en silencio una OTA a **C1.3.3_20260611** entre el 6 y el 8 de noviembre de 2026, o sea **después** del desmantelamiento y del comunicado de MECOOL. La OTA reescribió `/oem` completa y volvió a meter **el mismo XCPE 6.9.2, byte por byte** (mismo SHA256), y el mismo mini instalador en `/system`. Ver [La OTA de noviembre](#la-ota-de-noviembre-2026).
+- **Actualización 23-11-2026:** salió la **C1.3.5_20261111**, que **sí saca el XCPE**, pero viene firmada con **la misma llave de plataforma** que firmó el backdoor. Además, el OTA C1.2.7 con el XCPE adentro **se sigue pudiendo bajar** desde los servidores de Google. Ver [C1.3.5 y lo que sigue abierto](#c135-y-lo-que-sigue-abierto).
 
 ## Equipos
 
@@ -29,7 +30,7 @@ Si tienes una de estas tvbox y solo quieres saber qué hacer, salta mis hermosas
 | `ro.product.name` / device | `HP4414-MECOOL` / `YYC` | `HP4414-MECOOL` / `YYC` |
 | `ro.product.manufacturer` | `SkyworthDigital` | `SkyworthDigital` |
 | Android | 14 | 14 |
-| Firmware (`oem.buildnumber`) | `C1.3.1_20260314` → `C1.3.3_20260615` (OTA, nov. 2026) | `C1.2.7_20250822` |
+| Firmware (`oem.buildnumber`) | `C1.3.1_20260314` → `C1.3.3_20260615` (OTA, 6/8-11-2026) → `C1.3.5_20261111` (OTA con reseteo, 21-11-2026) | `C1.2.7_20250822` |
 | Estado al encontrarla | solo el mini instalador | **6.5.0 activo, MQTT corriendo** |
 
 El tvbox B es el más antiguo, de uso diario normal, y nunca lo había tocado antes de esto. (El `ro.build.fingerprint` de la C1.3.3 dice `C1.3.3_20260611`; el `oem.buildnumber` dice `20260615`, la fecha de la partición `/oem`.)
@@ -97,11 +98,46 @@ O sea:
 
 - `oem` está en `ro.product.ab_ota_partitions`. La OTA no "dejó olvidado" el backdoor: **escribió la partición `/oem` de nuevo y metió el mismo XCPE**.
 - El firmware se compiló en junio, antes del desmantelamiento, pero se **entregó e instaló en noviembre**, después del desmantelamiento (2-11) y del correo de MECOOL diciendo que estaban revisando el firmware (4-11).
-- Yo tenía `com.sdt.ota` desinstalado (`--user 0`) desde el 6-11, así que la OTA entró por otro lado. Lo más probable es `com.sdt.upgrade` (`SdtUpgradeService`), que no existe en la C1.2.7 y aparece en la C1.3.x.
+- Yo tenía `com.sdt.ota` desinstalado (`--user 0`) desde el 6-11, así que la OTA entró por otro lado. ~~Lo más probable es `com.sdt.upgrade` (`SdtUpgradeService`)~~ **Corrección (23-11):** los OTA de firmware de este equipo llegan por **Google System Update** (servicios de Google + `update_engine`) desde `android.googleapis.com`, no por las apps del fabricante. `SdtUpgradeService` resultó benigno: solo migra resolución y HDR después de una OTA.
 - **Lo bueno:** los `pm uninstall --user 0` sobrevivieron la OTA. `com.oemservice`, `com.oem.qa`, `backupappmanger` y `com.sdt.ota` siguieron desinstalados.
-- Con `com.sdt.ota` reactivado, ninguna de las dos tvbox ofreció más actualizaciones (10-11-2026). La tvbox B sigue en C1.2.7.
+- Con `com.sdt.ota` reactivado, ninguna de las dos tvbox ofreció más actualizaciones (10-11-2026). La tvbox B sigue en C1.2.7. (Después llegó la C1.3.5: ver [la sección siguiente](#c135-y-lo-que-sigue-abierto).)
 
 Ojo: el `firstInstallTime` de las apps de sistema nuevas sale 2008-12-31, y el timestamp de `reboot,ota` en `persist.sys.boot.reason.history` coincide con la fecha del build. Es el reloj del equipo que arranca en la fecha del firmware antes de sincronizar, no la fecha real de instalación.
+
+## C1.3.5 y lo que sigue abierto
+
+El 13-11-2026 apareció en los servidores de Google la **C1.3.5_20261111**. Es una OTA completa con `ota-wipe=yes`, o sea que resetea el equipo de fábrica sí o sí. La tvbox A se actualizó sola el 21-11 y quedó reseteada de fábrica. Al principio pensé que podía ser el comando remoto de reseteo del backdoor, pero no: fue la OTA (`reboot,factory_reset` justo después de instalarla).
+
+**Lo bueno:** la C1.3.5 **saca el XCPE**.
+- `/oem` ya no tiene `app_xcpe_ext_sign` ni `BoxFactoryTest_sign`.
+- Busqué todos los indicadores de estas notas (dominios, llave AES, clases `x.cpe`, rutas) en 3314 archivos del firmware: **cero coincidencias**.
+
+**Lo que sigue abierto:**
+
+1. **No cambiaron la llave de plataforma.** `framework-res.apk` (el paquete `android`) y las apps de sistema de la C1.3.5 están firmados con **el mismo certificado** que firmó todas las versiones del XCPE ([ver Firma](#firma)):
+   ```
+   CN=skydigital, OU=SKYWORTH, O=SKYWORTH, L=ShenZhen, ST=GuangDong, C=CN, E=skydigital@skyworth.com
+   SHA-1    1C:6A:0B:B5:70:10:A7:7C:BF:29:A4:95:FF:55:F7:36:2F:E3:32:A3
+   SHA-256  a5632097dbedf19c5972868d8ea85926480b9f25cb5f6393a2b11c6af10a613d
+   ```
+   En una tvbox "arreglada", cualquier APK firmado con esa llave puede volver a correr como sistema si llega a instalarse. Eso vale tanto para un XCPE viejo como para uno nuevo. O sea: quien firmó el backdoor puede seguir mandando código con permisos de sistema a estos equipos. No revisé si otras marcas usan la misma llave.
+2. **El firmware infectado se sigue pudiendo bajar.** El paquete oficial C1.2.7_20250822, con el XCPE 6.8.4 en `/oem`, todavía lo entregan los servidores de Google:
+   - URL: `https://android.googleapis.com/packages/ota-api/package/85b6685798448bac95049c6a2ce39ccf3a2618bb.zip`
+   - SHA-256: `52e2f0e759970e1d5cddad3090b7a4314023a902b87faf7450d9dc65ce8e4f1c`
+   - Al 23-11-2026 responde HTTP 200 y pesa 971 MB.
+   - Del C1.3.3 no encontré la URL, así que de ese no digo nada.
+3. **Las tvbox que no se han actualizado siguen infectadas** (C1.2.7, C1.3.1, C1.3.3). Siguen confiando en los dominios `*.anyevonline.com` y `*.szbboys.com`. Y como el arreglo obliga a resetear, mucha gente lo va a postergar. Mi tvbox B sigue en C1.2.7.
+4. **Dos apps del fabricante en la C1.3.5 dejan componentes abiertos.** Esto es aparte del XCPE, y es análisis estático, no lo probé en el equipo:
+   - `com.sdt.ota`: `BootService` está exportado sin permiso. Cualquier app podría pedir una actualización local con reseteo.
+   - `com.sdt.producttest`: corre como sistema y su `PropertiesProvider` está exportado sin permiso.
+
+   Después de la C1.3.5 (el reseteo deshace los `pm uninstall` de antes), las deshabilité:
+   ```
+   adb shell pm disable-user --user 0 com.sdt.ota
+   adb shell pm disable-user --user 0 com.sdt.producttest
+   ```
+
+**Si tienes una de estas tvbox:** actualiza a la C1.3.5 (respalda lo que necesites antes, porque se resetea). Después de actualizar, igual revisa con los comandos de [Revisa tu tvbox](#revisa-tu-tvbox).
 
 ## Lo que "puede" hacer
 
@@ -193,7 +229,7 @@ Un vínculo a nivel de código: XCPE tiene `com.oemservice.util.InstallForAndroi
 | `com.sdt.backupappmanger` | Una detección de AhnLab con el mismo nombre que le pone a XCPE (`Downloader/Android.Agent.1228987`). No está claro si es código compartido o una firma amplia. La saqué |
 | `com.sdt.remotecontrolota`, `globalkey`, `mecoolrcupair`, `frontpanelledsservice` | Se ven bien |
 | `com.sdt.axtools` (AxTools 1.0, `/system/app`, aparece en firmware posterior a C1.2.7) | Lo descompilé entero: 4 clases propias, cero código de red. Al arrancar, si `persist.sys.rectify.attkey=1`, borra los datos de `com.google.android.tv.axel` y deja la propiedad en 0. En mi equipo está en 0, así que no hace nada. Corre como UID 1000 (por eso la lista de permisos se ve terrible). VirusTotal 2/67, con la **misma** detección de AhnLab (`Downloader/Android.Agent.1228987`) que backupappmanger y XCPE. Benigno. SHA256 `d7eb4282373a191fce63c5d1e893f47c76d795646249f4b044c773032f2373cc` |
-| `com.sdt.upgrade` (`SdtUpgradeService`, aparece en C1.3.x) | UID de sistema, sin permisos propios. Probablemente por donde entró la OTA C1.3.3. Lo deshabilité |
+| `com.sdt.upgrade` (`SdtUpgradeService`, aparece en C1.3.x) | UID de sistema, sin permisos propios. ~~Probablemente por donde entró la OTA C1.3.3~~ **Corrección (23-11):** benigno, solo migra resolución y HDR después de una OTA. Las OTA llegan por Google System Update. No hace falta deshabilitarlo |
 
 Sobre AhnLab: a estas alturas `Downloader/Android.Agent.1228987` le cae a tres apps distintas firmadas con la misma llave de plataforma (XCPE, backupappmanger y AxTools, que es inofensivo). Parece una firma amplia, no una prueba por sí sola.
 
@@ -246,19 +282,21 @@ Si `codePath` apunta a `/data/app/...` y la versión es 6.x, se instaló el back
 
 ## Lo que hice
 
+**Actualización 23-11:** lo mejor ahora es **actualizar a la C1.3.5**, que saca el XCPE (resetea el equipo, así que respalda antes). Después, deshabilita `com.sdt.ota` y `com.sdt.producttest` como en [C1.3.5 y lo que sigue abierto](#c135-y-lo-que-sigue-abierto). Lo de abajo es lo que hice el 6-11, y sirve si sigues en C1.2.7, C1.3.1 o C1.3.3:
+
 ```bash
 adb shell pm uninstall --user 0 com.oemservice
 adb shell pm uninstall --user 0 com.oem.qa
 adb shell pm uninstall --user 0 com.sdt.backupappmanger
-adb shell pm uninstall --user 0 com.sdt.ota          # opcional; total, sus OTAs traen de regalo el mismo backdoor (ver arriba)
-adb shell pm disable-user --user 0 com.sdt.upgrade   # solo existe en C1.3.x; el otro camino de las OTAs
+adb shell pm uninstall --user 0 com.sdt.ota          # además tiene un servicio exportado sin permiso (ver C1.3.5 y lo que sigue abierto)
 adb shell pm disable-user --user 0 com.sdt.producttest
+# (antes también deshabilitaba com.sdt.upgrade; no hace falta, es benigno)
 
 # confirmar (sin -u, porque ese también lista los desinstalados)
 adb shell "pm list packages | grep -iE 'oemservice|oem.qa|backupappmanger|sdt.ota'"
 ```
 
-- Esto no borra nada de `/system` ni de `/oem` (para eso hace falta root). Oculta el paquete para el usuario 0. En mis pruebas aguantó los reinicios **y una OTA completa de firmware** (C1.3.1 → C1.3.3), pero **un reseteo de fábrica muy muy probablemente lo deshace porque esta en /oem**. Si alguna vez reseteas, repítelo antes de conectar la tvbox a internet, si puedes.
+- Esto no borra nada de `/system` ni de `/oem` (para eso hace falta root). Oculta el paquete para el usuario 0. En mis pruebas aguantó los reinicios **y una OTA completa de firmware** (C1.3.1 → C1.3.3), pero en esos firmwares **un reseteo de fábrica muy muy probablemente lo deshace porque esta en /oem**. Si alguna vez reseteas, repítelo antes de conectar la tvbox a internet, si puedes.
 - El control remoto, el Wi-Fi, Chromecast y las apps de streaming siguieron funcionando.
 - Como mi router no permite bloquear por dominio, agregué reglas de salida para las IP de las tvbox hacia TCP 16000, 1883, 8883, 8000 y 3885–3887 (y, si tu router deja, bloquea las IPs del operador que publicó Google: `219.134.163.210`, `219.134.163.211`, `38.145.197.135`, `23.94.49.57`). Es limitado, pero esos tvbox no tienen por que andar usando esos puertos. Si tu router o tu DNS permiten bloquear dominios, bloquea la lista de arriba. Mi conexión no tiene IPv6 público, así que no hay ruta para saltarse estas reglas; si la tuya tiene, replícalas en IPv6.
 - Después de limpiar: quedo,  sin servicios de accesibilidad, sin administradores de dispositivo, sin VPN, sin tareas programadas del backdoor, sin animación de arranque reemplazada, y solo conexiones abiertas a Google, CDNs y Chromecast.
@@ -274,14 +312,14 @@ Tras una consulta corta por el formulario de su tienda, el 4-11-2026 mandaron un
 
 Lo que no dicen: nada sobre una OTA que saque XCPE, ni qué modelos o firmwares están afectados. Y la firma de [arriba](#firma) es `skydigital@skyworth.com`, no de Videostrong. Entre dos y cuatro días después de ese correo, mi tvbox recibió una OTA que volvió a instalar el mismo XCPE.
 
-El reporte formal (con el [advisory en inglés](ADVISORY.md)) está pendiente de envío.
+El 10-11-2026 les mandé el reporte formal, con el [advisory en inglés](ADVISORY.md) y tres preguntas directas. El 11-11 respondieron con **el mismo comunicado del 4-11**, sin contestar ninguna pregunta.
 
 ## Limitaciones
 
 - Análisis estatico (strings, manifiestos, `dumpsys`) más una captura de red corta, hecha cuando el C2 ya estaba caído. Nunca lo vi recibir un comando.
 - No descompilé el DEX a Java completo. La lista de capacidades sale de nombres de clases, strings y etc.
 - Mi suposicion sobre el historial de versiones de la tvbox B es solo eso, una suposición.
-- No probé si un reseteo de fábrica lo trae de vuelta. Eso es lo que dicen los reportes públicos y no quiero instalar todo nuevamente, algun dia supongo que lo tendre que hacer y antes de conectarlo a internet voy a desinstalar lo mismo de ahora.
+- En C1.2.7, C1.3.1 y C1.3.3 no probé si un reseteo de fábrica lo trae de vuelta. Eso es lo que dicen los reportes públicos. (Actualización 23-11: la tvbox A se reseteó con la C1.3.5 y ahí el XCPE no vuelve, porque ya no está en `/oem`.)
 
 ## Fuentes
 
